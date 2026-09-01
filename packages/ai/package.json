@@ -1,0 +1,26 @@
+{
+  "name": "@forgeai/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "@forgeai/shared": "*",
+    "zod": "^3.23.8"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "openai": "^4.73.0",
+    "@google/genai": "^0.3.0"
+  }
+}

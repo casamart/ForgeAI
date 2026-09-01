@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/solari" },
+    { "path": "./packages/ai" },
+    { "path": "./packages/agents" }
+  ]
+}

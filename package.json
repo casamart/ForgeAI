@@ -1,0 +1,32 @@
+{
+  "name": "forgeai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ForgeAI — autonomous AI software engineer built on Solari sandboxes and browsers.",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "poc": "npm run start --workspace @forgeai/example-poc",
+    "ai:smoke": "npm run start --workspace @forgeai/example-ai-smoke",
+    "dev:smoke": "npm run start --workspace @forgeai/example-developer-smoke",
+    "arch:smoke": "npm run start --workspace @forgeai/example-architect-smoke",
+    "qa:smoke": "npm run start --workspace @forgeai/example-qa-smoke",
+    "dbg:smoke": "npm run start --workspace @forgeai/example-debugger-smoke",
+    "rev:smoke": "npm run start --workspace @forgeai/example-reviewer-smoke",
+    "typecheck": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
