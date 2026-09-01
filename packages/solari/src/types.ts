@@ -49,6 +49,8 @@ export interface ISandbox {
    * file inside the environment for later inspection.
    */
   startBackground(commandLine: string, opts?: Omit<RunOptions, "args">): Promise<void>;
+  /** Stop processes started via startBackground (best-effort). Idempotent. */
+  stopBackground(): Promise<void>;
 
   writeFile(path: string, content: string): Promise<void>;
   readFile(path: string): Promise<string>;

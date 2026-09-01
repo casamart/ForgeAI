@@ -22,11 +22,16 @@ npm run arch:smoke     # Architect → Developer handoff: plan → build → tes
 npm run qa:smoke       # QA Agent proof: browser checks with honest verdicts
 npm run dbg:smoke      # Autonomous repair: plant a bug → diagnose → fix → verify
 npm run rev:smoke      # Reviewer: evidence-gated verdict + engineering report
+npm run demo           # FULL PIPELINE: requirement → tested app + report
 ```
 
-All five agents are implemented (`Architect`, `Developer`, `QA`, `Debugger`,
-`Reviewer`) and each has a runnable, evidence-backed proof above. Next is the
-**Orchestrator** that runs them as one `CREATED → … → COMPLETED` pipeline.
+**`npm run demo` is the whole product in one run:** one requirement in →
+Architect plans → sandbox → Developer builds → unit tests → app starts →
+browser QA → Reviewer → engineering report out. The Orchestrator drives all
+five agents through `PLANNING → … → COMPLETED`, looping back to `DEBUGGING`
+(the autonomous repair loop) whenever tests or QA fail, with bounded retries
+and automatic resource cleanup. It runs offline via a mock, or against real
+Claude/OpenAI/Gemini + Solari by swapping the provider — no other code changes.
 
 ### Choosing an AI provider
 

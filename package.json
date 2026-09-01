@@ -18,6 +18,7 @@
     "qa:smoke": "npm run start --workspace @forgeai/example-qa-smoke",
     "dbg:smoke": "npm run start --workspace @forgeai/example-debugger-smoke",
     "rev:smoke": "npm run start --workspace @forgeai/example-reviewer-smoke",
+    "demo": "npm run start --workspace @forgeai/example-forge-marketplace",
     "typecheck": "tsc --build",
     "clean": "tsc --build --clean"
   },

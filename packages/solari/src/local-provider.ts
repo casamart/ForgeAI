@@ -88,6 +88,19 @@ class LocalSandbox implements ISandbox {
     await new Promise((r) => setTimeout(r, 300));
   }
 
+  async stopBackground(): Promise<void> {
+    for (const c of this.children) {
+      try {
+        c.kill();
+      } catch {
+        /* already gone */
+      }
+    }
+    this.children = [];
+    // Let the OS release the port before anything rebinds it.
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
   private spawn(
     cmd: string,
     args: string[],

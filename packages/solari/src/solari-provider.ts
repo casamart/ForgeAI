@@ -87,6 +87,12 @@ class SolariSandbox implements ISandbox {
     });
   }
 
+  async stopBackground(): Promise<void> {
+    // Best-effort inside the isolated VM: stop node dev servers so the port
+    // frees up before a restart. "|| true" so a no-match is not an error.
+    await this.run("sh", { args: ["-c", "pkill -f 'node ' || true"] });
+  }
+
   async writeFile(path: string, content: string): Promise<void> {
     await this.handle.files.write(path, content);
   }
