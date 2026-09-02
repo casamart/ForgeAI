@@ -24,7 +24,17 @@ npm run dbg:smoke      # Autonomous repair: plant a bug → diagnose → fix →
 npm run rev:smoke      # Reviewer: evidence-gated verdict + engineering report
 npm run demo           # FULL PIPELINE: requirement → tested app + report
 npm run api            # HTTP API + live SSE event stream (see below)
+npm run web            # Dashboard UI (Next.js) — run alongside `npm run api`
 ```
+
+### Dashboard
+
+`npm run api` (backend, port 4000) + `npm run web` (dashboard, port 3000) gives a
+live UI: enter a requirement, press **Start build**, and watch the pipeline
+stream — phase cards, a lighting-up timeline, a colour-coded agent log, and the
+final engineering report with verdict, test/QA counts, bugs and a preview link.
+The dashboard talks to the backend only over HTTP/SSE (`NEXT_PUBLIC_API_BASE`,
+default `http://localhost:4000`) and holds no credentials.
 
 ### HTTP API + live event stream (SSE)
 
