@@ -23,7 +23,35 @@ npm run qa:smoke       # QA Agent proof: browser checks with honest verdicts
 npm run dbg:smoke      # Autonomous repair: plant a bug → diagnose → fix → verify
 npm run rev:smoke      # Reviewer: evidence-gated verdict + engineering report
 npm run demo           # FULL PIPELINE: requirement → tested app + report
+npm run api            # HTTP API + live SSE event stream (see below)
 ```
+
+### HTTP API + live event stream (SSE)
+
+`npm run api` starts the ForgeAI backend on `http://localhost:4000`. It runs the
+whole pipeline server-side (credentials never reach the browser) and streams
+every agent event live over Server-Sent Events — the same stream that will drive
+the dashboard.
+
+```bash
+# start a build (offline demo — no API key needed)
+curl -sX POST localhost:4000/api/projects -H 'content-type: application/json' \
+  -d '{"demo":true,"name":"My build"}'
+# -> { "id": "…", "events": "/api/projects/<id>/events" }
+
+curl -N localhost:4000/api/projects/<id>/events   # watch it build, live
+curl -s  localhost:4000/api/projects/<id>          # status + final report
+```
+
+| Method & path | Purpose |
+|---|---|
+| `POST /api/projects` | Start a build `{ requirement, name?, demo? }` |
+| `GET /api/projects` | List builds |
+| `GET /api/projects/:id` | Build detail + final engineering report |
+| `GET /api/projects/:id/events` | Live event stream (SSE; replays history on connect) |
+
+Set `FORGEAI_AI_PROVIDER` (+ its key) to run real agents; otherwise the API
+falls back to the offline scripted demo so the stream still works with no key.
 
 **`npm run demo` is the whole product in one run:** one requirement in →
 Architect plans → sandbox → Developer builds → unit tests → app starts →

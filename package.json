@@ -19,6 +19,8 @@
     "dbg:smoke": "npm run start --workspace @forgeai/example-debugger-smoke",
     "rev:smoke": "npm run start --workspace @forgeai/example-reviewer-smoke",
     "demo": "npm run start --workspace @forgeai/example-forge-marketplace",
+    "api": "npm run start --workspace @forgeai/api",
+    "api:dev": "npm run dev --workspace @forgeai/api",
     "typecheck": "tsc --build",
     "clean": "tsc --build --clean"
   },
