@@ -1,0 +1,11 @@
+# Never ship these into the build context / image.
+node_modules
+**/node_modules
+.git
+**/dist
+**/.next
+**/*.tsbuildinfo
+docs
+*.log
+.env
+.env.*
