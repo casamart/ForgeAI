@@ -16,6 +16,7 @@ with every result backed by observed evidence (HTTP status, response body, exit 
 npm install
 npm run build          # compile the @forgeai/* packages
 npm run poc            # Phase 1: end-to-end sandbox → API → browser QA proof
+                       #   (uses port 3000; override: FORGEAI_POC_PORT=3400 npm run poc)
 npm run ai:smoke       # AI layer proof (mock provider, no API key needed)
 npm run dev:smoke      # Developer Agent proof: build + test in a sandbox
 npm run arch:smoke     # Architect → Developer handoff: plan → build → test

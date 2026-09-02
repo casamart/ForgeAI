@@ -14,7 +14,9 @@ import { createSolariProvider } from "@forgeai/solari";
 import { EventBus, Logger } from "@forgeai/shared";
 import type { ISandbox } from "@forgeai/solari";
 
-const PORT = 3000;
+// Port the generated app listens on. Override with FORGEAI_POC_PORT (or PORT)
+// if something else already owns 3000 on your machine.
+const PORT = Number(process.env.FORGEAI_POC_PORT || process.env.PORT) || 3000;
 const WORKSPACE = "/workspace/project";
 
 interface Check {
