@@ -8,3 +8,8 @@ dist/
 .forgeai/
 artifacts/
 coverage/
+
+# Next.js (apps/web)
+.next/
+next-env.d.ts
+.env*.local
