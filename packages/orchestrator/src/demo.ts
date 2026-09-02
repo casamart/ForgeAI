@@ -98,3 +98,79 @@ export function createDemoAIProvider(): AIProvider {
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Repair scenario: the Developer ships a REAL bug first, the unit test fails,
+// the Debugger diagnoses it, the Developer fixes it, and the test passes — all
+// streamed live. This is the most convincing thing to show a reviewer: the
+// autonomous repair loop actually running, with evidence at every step.
+// ---------------------------------------------------------------------------
+
+// A rating module with a genuine bug: it returns the SUM, not the average.
+const RATING_BUGGY =
+  "export function average(nums) {\n" +
+  "  // BUG: returns the sum instead of the mean (forgot to divide).\n" +
+  "  return nums.reduce((a, b) => a + b, 0);\n" +
+  "}\n";
+
+// The corrected module the Developer writes during the fix.
+const RATING_FIXED =
+  "export function average(nums) {\n" +
+  "  if (nums.length === 0) return 0;\n" +
+  "  return nums.reduce((a, b) => a + b, 0) / nums.length;\n" +
+  "}\n";
+
+// A test that imports the module, so the bug makes `node --test` genuinely fail.
+const RATING_TEST_IMPORT =
+  'import { test } from "node:test";\n' +
+  'import assert from "node:assert";\n' +
+  'import { average } from "./rating.mjs";\n' +
+  'test("average of [5,4,5,3] is 4.25", () => {\n' +
+  "  assert.strictEqual(average([5, 4, 5, 3]), 4.25);\n" +
+  "});\n";
+
+// First Developer run: buggy module + test + a (correct) server for later QA.
+const REPAIR_DEV_ACTIONS_BUILD = [
+  JSON.stringify({ tool: "writeFile", path: "rating.mjs", content: RATING_BUGGY }),
+  JSON.stringify({ tool: "writeFile", path: "rating.test.mjs", content: RATING_TEST_IMPORT }),
+  JSON.stringify({ tool: "writeFile", path: "server.js", content: SERVER_JS }),
+  JSON.stringify({ tool: "done", summary: "Built server + rating module + test." }),
+];
+
+// Second Developer run (invoked by the repair loop): apply the fix.
+const REPAIR_DEV_ACTIONS_FIX = [
+  JSON.stringify({ tool: "writeFile", path: "rating.mjs", content: RATING_FIXED }),
+  JSON.stringify({ tool: "run", command: "node --test" }),
+  JSON.stringify({ tool: "done", summary: "Divided the sum by the count." }),
+];
+
+const REPAIR_DIAGNOSIS = JSON.stringify({
+  rootCause:
+    "average() in rating.mjs returns the sum of the ratings and never divides by nums.length.",
+  confidence: "high",
+  filesToInspect: ["rating.mjs"],
+  fixInstruction:
+    "In rating.mjs, divide the sum by nums.length so average([5,4,5,3]) returns 4.25.",
+  verification: "node --test",
+});
+
+/**
+ * Like createDemoAIProvider(), but the Developer's first attempt is buggy so the
+ * repair loop kicks in. The Developer queue holds BOTH runs back-to-back; each
+ * developer.implement() call drains actions up to its "done".
+ */
+export function createRepairDemoAIProvider(): AIProvider {
+  const devQueue = [...REPAIR_DEV_ACTIONS_BUILD, ...REPAIR_DEV_ACTIONS_FIX];
+  return new MockProvider({
+    responder: (messages: ChatMessage[]) => {
+      const sys = messages.find((m) => m.role === "system")?.content ?? "";
+      if (sys.includes("Architect Agent")) return PLAN;
+      if (sys.includes("QA Agent")) return QA_CHECKS;
+      if (sys.includes("Reviewer Agent")) return REVIEW;
+      if (sys.includes("Debugger Agent")) return REPAIR_DIAGNOSIS;
+      if (sys.includes("Developer Agent"))
+        return devQueue.shift() ?? JSON.stringify({ tool: "done", summary: "done" });
+      return "{}";
+    },
+  });
+}

@@ -11,6 +11,7 @@ import { createAIProvider } from "@forgeai/ai";
 import {
   Orchestrator,
   createDemoAIProvider,
+  createRepairDemoAIProvider,
   DEMO_REQUIREMENT,
   type BuildResult,
 } from "@forgeai/orchestrator";
@@ -40,6 +41,12 @@ export interface CreateProjectInput {
   name?: string;
   /** Force the offline scripted demo (no API key needed). */
   demo?: boolean;
+  /**
+   * Which demo storyline to run (demo mode only):
+   *  - "happy"  (default) builds cleanly first time,
+   *  - "repair" ships a bug so the autonomous repair loop runs live.
+   */
+  scenario?: "happy" | "repair";
 }
 
 export class ProjectStore {
@@ -75,7 +82,9 @@ export class ProjectStore {
     this.projects.set(id, record);
 
     const ai = useDemo
-      ? createDemoAIProvider()
+      ? input.scenario === "repair"
+        ? createRepairDemoAIProvider()
+        : createDemoAIProvider()
       : createAIProvider(configured as AiProvider);
     const logger = new Logger({ scope: `proj:${id.slice(0, 8)}`, bus });
     const orchestrator = new Orchestrator({

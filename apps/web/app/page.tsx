@@ -78,6 +78,7 @@ export default function Dashboard() {
   const [requirement, setRequirement] = useState(DEFAULT_REQUIREMENT);
   const [name, setName] = useState("Nigerian Worker Marketplace API");
   const [demo, setDemo] = useState(true);
+  const [repair, setRepair] = useState(false);
 
   const [projectId, setProjectId] = useState<string | null>(null);
   const [events, setEvents] = useState<ForgeEvent[]>([]);
@@ -132,7 +133,12 @@ export default function Dashboard() {
     seen.current = new Set();
     setStatus("running");
     try {
-      const { id } = await startBuild({ requirement, name, demo });
+      const { id } = await startBuild({
+        requirement,
+        name,
+        demo,
+        scenario: repair ? "repair" : "happy",
+      });
       setProjectId(id);
     } catch (err) {
       setError((err as Error).message);
@@ -149,7 +155,11 @@ export default function Dashboard() {
     return status === "idle" ? "" : "PLANNING";
   }, [events, status]);
 
-  const currentIndex = TIMELINE.findIndex((t) => t.state === currentState);
+  // DEBUGGING is a transient detour (the repair loop). Keep the timeline steady
+  // at the phase being repaired and flag that a repair is in progress.
+  const repairing = currentState === "DEBUGGING";
+  const effectiveState = repairing ? "UNIT_TESTING" : currentState;
+  const currentIndex = TIMELINE.findIndex((t) => t.state === effectiveState);
 
   // Live counters derived from the event stream.
   const counts = useMemo(() => {
@@ -157,8 +167,10 @@ export default function Dashboard() {
       unitFailed = 0,
       qaPassed = 0,
       qaFailed = 0,
-      bugs = 0;
+      bugs = 0,
+      fixes = 0;
     for (const e of events) {
+      if (e.type === "fix.completed") fixes++;
       if (e.type === "test.passed") {
         unitPassed = Number(e.metadata?.passed ?? unitPassed);
         unitFailed = Number(e.metadata?.failed ?? unitFailed);
@@ -171,7 +183,7 @@ export default function Dashboard() {
       if (e.type === "qa.failed") qaFailed++;
       if (e.type === "bug.detected") bugs++;
     }
-    return { unitPassed, unitFailed, qaPassed, qaFailed, bugs };
+    return { unitPassed, unitFailed, qaPassed, qaFailed, bugs, fixes };
   }, [events]);
 
   const qaTotal = counts.qaPassed + counts.qaFailed;
@@ -225,6 +237,16 @@ export default function Dashboard() {
               disabled={status === "running"}
             />
             <label htmlFor="demo">Offline demo (no API key needed)</label>
+          </div>
+          <div className="row">
+            <input
+              id="repair"
+              type="checkbox"
+              checked={repair}
+              onChange={(e) => setRepair(e.target.checked)}
+              disabled={status === "running" || !demo}
+            />
+            <label htmlFor="repair">Inject a bug — show the self-repair loop</label>
           </div>
           <button
             className="primary"
@@ -293,6 +315,14 @@ export default function Dashboard() {
                 </span>
               );
             })}
+            {repairing && (
+              <span className="step repairing">⟳ self-repairing…</span>
+            )}
+            {!repairing && counts.fixes > 0 && (
+              <span className="step done">
+                ✓ {counts.fixes} autonomous fix{counts.fixes > 1 ? "es" : ""}
+              </span>
+            )}
           </div>
 
           {/* Live event log */}

@@ -43,6 +43,7 @@ export async function startBuild(input: {
   requirement: string;
   name?: string;
   demo?: boolean;
+  scenario?: "happy" | "repair";
 }): Promise<{ id: string; events: string }> {
   const res = await fetch(`${API_BASE}/api/projects`, {
     method: "POST",

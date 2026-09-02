@@ -12,4 +12,8 @@ export {
   START_COMMAND,
 } from "./conventions.js";
 export { parseTestOutput, type TestCounts } from "./test-parser.js";
-export { createDemoAIProvider, DEMO_REQUIREMENT } from "./demo.js";
+export {
+  createDemoAIProvider,
+  createRepairDemoAIProvider,
+  DEMO_REQUIREMENT,
+} from "./demo.js";

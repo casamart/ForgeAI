@@ -45,13 +45,18 @@ app.get("/", (_req, res) => {
 
 // Start a build.
 app.post("/api/projects", (req: Request, res: Response) => {
-  const { requirement, name, demo } = req.body ?? {};
+  const { requirement, name, demo, scenario } = req.body ?? {};
   if (demo !== true && (typeof requirement !== "string" || !requirement.trim())) {
     return res
       .status(400)
       .json({ error: "requirement (string) is required unless demo:true" });
   }
-  const record = store.create({ requirement, name, demo });
+  const record = store.create({
+    requirement,
+    name,
+    demo,
+    scenario: scenario === "repair" ? "repair" : "happy",
+  });
   res.status(201).json({
     id: record.id,
     status: record.status,

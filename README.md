@@ -23,6 +23,7 @@ npm run qa:smoke       # QA Agent proof: browser checks with honest verdicts
 npm run dbg:smoke      # Autonomous repair: plant a bug → diagnose → fix → verify
 npm run rev:smoke      # Reviewer: evidence-gated verdict + engineering report
 npm run demo           # FULL PIPELINE: requirement → tested app + report
+npm run demo:repair    # SAME, but a bug is injected → autonomous repair loop
 npm run api            # HTTP API + live SSE event stream (see below)
 npm run web            # Dashboard UI (Next.js) — run alongside `npm run api`
 ```
@@ -35,6 +36,12 @@ stream — phase cards, a lighting-up timeline, a colour-coded agent log, and th
 final engineering report with verdict, test/QA counts, bugs and a preview link.
 The dashboard talks to the backend only over HTTP/SSE (`NEXT_PUBLIC_API_BASE`,
 default `http://localhost:4000`) and holds no credentials.
+
+Tick **"Inject a bug — show the self-repair loop"** to watch the closed
+engineering loop live: the Developer's first attempt ships a real bug, the unit
+test fails, the Debugger diagnoses it, the Developer fixes it, and the test
+passes — all autonomously, streamed to the log with a "self-repairing…"
+indicator and an "autonomous fix" marker on the timeline.
 
 ### HTTP API + live event stream (SSE)
 
