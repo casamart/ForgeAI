@@ -4,6 +4,12 @@
 
 ForgeAI is a portfolio/hiring-challenge project designed to demonstrate practical AI-agent engineering with Solari.
 
+## Demo
+
+![ForgeAI dashboard: a bug is injected, the unit test fails, the Debugger diagnoses it, the Developer fixes it, and the build passes — autonomously.](docs/media/forgeai-repair-demo.gif)
+
+*The self-repair loop, live: with "Inject a bug" enabled, the Developer's first attempt fails its unit test → the Debugger diagnoses the root cause → the Developer applies the fix → the test passes → ForgeAI emits a PASS engineering report. Recorded from the running dashboard.*
+
 ## Status
 
 **Phase 1 (Proof of Concept) — ✅ working.** The hardest technical path is proven end-to-end:
