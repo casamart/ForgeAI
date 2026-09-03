@@ -1,10 +1,11 @@
 /**
- * In-memory project store (MVP — a database comes later, see docs/database.md).
+ * Project store — the API's use-case layer over the repositories (§24/§25).
  *
- * Each "project" is one build attempt. The store starts the Orchestrator in the
- * background, keeps its EventBus (so we can stream events over SSE), and records
- * the final result. All AI/Solari credentials stay here on the server — they are
- * never sent to the browser (SECURITY: keys stay server-side).
+ * Persistence goes through ProjectRepository + EventRepository (in-memory by
+ * default, Postgres-ready later). Live handles for a running build — its
+ * EventBus and Orchestrator — are NOT persistable, so they are kept in a
+ * runtime-only map here. All AI/Solari credentials stay server-side; they never
+ * reach the browser.
  */
 import { randomUUID } from "node:crypto";
 import { createAIProvider } from "@forgeai/ai";
@@ -13,11 +14,18 @@ import {
   createDemoAIProvider,
   createRepairDemoAIProvider,
   DEMO_REQUIREMENT,
-  type BuildResult,
 } from "@forgeai/orchestrator";
-import { EventBus, Logger, type AiProvider } from "@forgeai/shared";
+import { EventBus, Logger, type AiProvider, type ForgeEvent } from "@forgeai/shared";
+import {
+  InMemoryEventRepository,
+  InMemoryProjectRepository,
+  type EventRepository,
+  type ProjectRepository,
+  type ProjectStatus,
+  type StoredProject,
+} from "./repositories/index.js";
 
-export type ProjectStatus = "running" | "completed" | "failed" | "cancelled";
+export type { ProjectStatus, StoredProject };
 
 export interface ProjectSummary {
   id: string;
@@ -28,13 +36,6 @@ export interface ProjectSummary {
   createdAt: number;
   durationMs?: number;
   demo: boolean;
-}
-
-interface ProjectRecord extends ProjectSummary {
-  bus: EventBus;
-  orchestrator: Orchestrator;
-  result?: BuildResult;
-  error?: string;
 }
 
 export interface CreateProjectInput {
@@ -50,12 +51,23 @@ export interface CreateProjectInput {
   scenario?: "happy" | "repair";
 }
 
-export class ProjectStore {
-  private projects = new Map<string, ProjectRecord>();
-  private nextPort = 3300;
+// Runtime-only handles for a build (never persisted).
+interface LiveHandles {
+  bus: EventBus;
+  orchestrator: Orchestrator;
+}
 
-  /** Start a new build and return its record immediately (runs in background). */
-  create(input: CreateProjectInput): ProjectRecord {
+export class ProjectStore {
+  private nextPort = 3300;
+  private live = new Map<string, LiveHandles>();
+
+  constructor(
+    private projects: ProjectRepository = new InMemoryProjectRepository(),
+    private events: EventRepository = new InMemoryEventRepository(),
+  ) {}
+
+  /** Start a new build; returns the stored project immediately (runs in background). */
+  async create(input: CreateProjectInput): Promise<StoredProject> {
     const id = randomUUID();
     const bus = new EventBus();
 
@@ -68,15 +80,15 @@ export class ProjectStore {
       configured === "mock" ||
       configured === "demo";
 
-    const requirement =
-      input.requirement?.trim() || DEMO_REQUIREMENT;
+    const requirement = input.requirement?.trim() || DEMO_REQUIREMENT;
+    const name = input.name?.trim() || "ForgeAI Project";
 
     const ai = useDemo
       ? input.scenario === "repair"
         ? createRepairDemoAIProvider()
         : createDemoAIProvider()
       : createAIProvider(configured as AiProvider);
-    const name = input.name?.trim() || "ForgeAI Project";
+
     const logger = new Logger({ scope: `proj:${id.slice(0, 8)}`, bus });
     const orchestrator = new Orchestrator({
       ai,
@@ -87,97 +99,115 @@ export class ProjectStore {
       logger,
     });
 
-    const record: ProjectRecord = {
+    const stored: StoredProject = {
       id,
       name,
       requirement,
       status: "running",
       createdAt: Date.now(),
       demo: useDemo,
-      bus,
-      orchestrator,
     };
-    this.projects.set(id, record);
+    await this.projects.create(stored);
+    this.live.set(id, { bus, orchestrator });
+
+    // §24: persist every event as it happens, then it is broadcast over SSE.
+    bus.on((e: ForgeEvent) => {
+      void this.events.append(id, e);
+    });
 
     // Fire and forget — SSE streams progress; the record is updated on finish.
     orchestrator
       .build(requirement)
       .then((result) => {
-        record.result = result;
-        record.status =
+        const status: ProjectStatus =
           result.state === "COMPLETED"
             ? "completed"
             : result.state === "CANCELLED"
               ? "cancelled"
               : "failed";
-        record.verdict = result.review?.status;
-        record.durationMs = result.durationMs;
+        void this.projects.update(id, {
+          result,
+          status,
+          verdict: result.review?.status,
+          durationMs: result.durationMs,
+        });
       })
       .catch((err: unknown) => {
-        record.status = "failed";
-        record.error = (err as Error).message;
+        void this.projects.update(id, { status: "failed", error: (err as Error).message });
         bus.emit("project.failed", `Build crashed: ${(err as Error).message}`);
       });
 
-    return record;
+    return stored;
   }
 
-  get(id: string): ProjectRecord | undefined {
+  async get(id: string): Promise<StoredProject | undefined> {
     return this.projects.get(id);
   }
 
-  /** Request cooperative cancellation of a running build (§22). */
-  cancel(id: string): { ok: boolean; status: ProjectStatus } | undefined {
-    const record = this.projects.get(id);
-    if (!record) return undefined;
-    if (record.status === "running") record.orchestrator.cancel();
-    return { ok: record.status === "running", status: record.status };
+  async list(): Promise<ProjectSummary[]> {
+    return (await this.projects.list()).map(toSummary);
   }
 
-  list(): ProjectSummary[] {
-    return [...this.projects.values()]
-      .map(toSummary)
-      .sort((a, b) => b.createdAt - a.createdAt);
+  /** The full detail view returned by GET /api/projects/:id. */
+  async detail(id: string): Promise<ReturnType<typeof toDetail> | undefined> {
+    const p = await this.projects.get(id);
+    if (!p) return undefined;
+    return toDetail(p, await this.events.count(id));
+  }
+
+  /** Replay persisted events (so a reconnecting client gets full history, §24). */
+  async eventsSince(id: string, sinceId = 0): Promise<ForgeEvent[]> {
+    return this.events.list(id, sinceId);
+  }
+
+  /** The live EventBus for an in-progress build (undefined once it has finished). */
+  liveBus(id: string): EventBus | undefined {
+    return this.live.get(id)?.bus;
+  }
+
+  /** Request cooperative cancellation of a running build (§22). */
+  async cancel(id: string): Promise<{ ok: boolean; status: ProjectStatus } | undefined> {
+    const p = await this.projects.get(id);
+    if (!p) return undefined;
+    if (p.status === "running") this.live.get(id)?.orchestrator.cancel();
+    return { ok: p.status === "running", status: p.status };
   }
 }
 
-export function toSummary(r: ProjectRecord): ProjectSummary {
+export function toSummary(p: StoredProject): ProjectSummary {
   return {
-    id: r.id,
-    name: r.name,
-    requirement: r.requirement,
-    status: r.status,
-    verdict: r.verdict,
-    createdAt: r.createdAt,
-    durationMs: r.durationMs,
-    demo: r.demo,
+    id: p.id,
+    name: p.name,
+    requirement: p.requirement,
+    status: p.status,
+    verdict: p.verdict,
+    createdAt: p.createdAt,
+    durationMs: p.durationMs,
+    demo: p.demo,
   };
 }
 
-/** The full detail view returned by GET /api/projects/:id. */
-export function toDetail(r: ProjectRecord) {
+export function toDetail(p: StoredProject, eventCount: number) {
   return {
-    ...toSummary(r),
-    error: r.error,
-    report: r.result?.report,
-    previewUrl: r.result?.previewUrl,
-    unitTests: r.result?.unitTests,
-    qa: r.result?.qa
+    ...toSummary(p),
+    error: p.error,
+    report: p.result?.report,
+    previewUrl: p.result?.previewUrl,
+    unitTests: p.result?.unitTests,
+    qa: p.result?.qa
       ? {
-          passed: r.result.qa.passed,
-          failed: r.result.qa.failed,
-          blocked: r.result.qa.blocked,
-          inconclusive: r.result.qa.inconclusive,
-          bugs: r.result.qa.bugs,
+          passed: p.result.qa.passed,
+          failed: p.result.qa.failed,
+          blocked: p.result.qa.blocked,
+          inconclusive: p.result.qa.inconclusive,
+          bugs: p.result.qa.bugs,
         }
       : undefined,
-    review: r.result?.review,
-    plan: r.result?.plan,
-    criteria: r.result?.criteria,
-    traceability: r.result?.traceability,
-    evidence: r.result?.evidence,
-    eventCount: r.bus.history().length,
+    review: p.result?.review,
+    plan: p.result?.plan,
+    criteria: p.result?.criteria,
+    traceability: p.result?.traceability,
+    evidence: p.result?.evidence,
+    eventCount,
   };
 }
-
-export type { ProjectRecord };

@@ -11,7 +11,7 @@
  */
 import express, { type Request, type Response } from "express";
 import type { ForgeEvent } from "@forgeai/shared";
-import { ProjectStore, toDetail } from "./store.js";
+import { ProjectStore } from "./store.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 const store = new ProjectStore();
@@ -45,51 +45,53 @@ app.get("/", (_req, res) => {
 });
 
 // Start a build.
-app.post("/api/projects", (req: Request, res: Response) => {
+app.post("/api/projects", async (req: Request, res: Response) => {
   const { requirement, name, demo, scenario } = req.body ?? {};
   if (demo !== true && (typeof requirement !== "string" || !requirement.trim())) {
     return res
       .status(400)
       .json({ error: "requirement (string) is required unless demo:true" });
   }
-  const record = store.create({
+  const stored = await store.create({
     requirement,
     name,
     demo,
     scenario: scenario === "repair" ? "repair" : "happy",
   });
   res.status(201).json({
-    id: record.id,
-    status: record.status,
-    demo: record.demo,
-    events: `/api/projects/${record.id}/events`,
+    id: stored.id,
+    status: stored.status,
+    demo: stored.demo,
+    events: `/api/projects/${stored.id}/events`,
   });
 });
 
 // List builds.
-app.get("/api/projects", (_req, res) => {
-  res.json({ projects: store.list() });
+app.get("/api/projects", async (_req, res) => {
+  res.json({ projects: await store.list() });
 });
 
 // Build detail.
-app.get("/api/projects/:id", (req, res) => {
-  const record = store.get(req.params.id);
-  if (!record) return res.status(404).json({ error: "not found" });
-  res.json(toDetail(record));
+app.get("/api/projects/:id", async (req, res) => {
+  const detail = await store.detail(req.params.id);
+  if (!detail) return res.status(404).json({ error: "not found" });
+  res.json(detail);
 });
 
 // Cancel a running build (§22). Cooperative: the orchestrator stops at its
 // next checkpoint, cleans up, and ends in CANCELLED.
-app.post("/api/projects/:id/cancel", (req, res) => {
-  const result = store.cancel(req.params.id);
+app.post("/api/projects/:id/cancel", async (req, res) => {
+  const result = await store.cancel(req.params.id);
   if (!result) return res.status(404).json({ error: "not found" });
   res.json({ id: req.params.id, cancelling: result.ok, status: result.status });
 });
 
-// Live event stream (SSE). Replays history, then streams new events live.
-app.get("/api/projects/:id/events", (req, res) => {
-  const record = store.get(req.params.id);
-  if (!record) return res.status(404).json({ error: "not found" });
+// Live event stream (SSE). Replays PERSISTED history from the event repository
+// (so a client reconnecting even after completion gets the full story, §24),
+// then streams new events live from the build's bus if it is still running.
+app.get("/api/projects/:id/events", async (req, res) => {
+  const id = req.params.id;
+  if (!(await store.get(id))) return res.status(404).json({ error: "not found" });
 
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -103,16 +105,19 @@ app.get("/api/projects/:id/events", (req, res) => {
     res.write(`id: ${e.id}\ndata: ${JSON.stringify(e)}\n\n`);
   };
 
-  // 1. Replay everything that already happened, tracking the last id...
+  // 1. Replay persisted events, tracking the last id...
   let lastId = 0;
-  for (const e of record.bus.history()) {
+  for (const e of await store.eventsSince(id)) {
     send(e);
     lastId = e.id;
   }
-  // 2. ...then stream only newer events (no duplicates).
-  const unsubscribe = record.bus.on((e) => {
-    if (e.id > lastId) send(e);
-  });
+  // 2. ...then stream only newer events live (if the build is still running).
+  const bus = store.liveBus(id);
+  const unsubscribe = bus
+    ? bus.on((e) => {
+        if (e.id > lastId) send(e);
+      })
+    : () => {};
 
   // Keep the connection warm through idle stretches.
   const heartbeat = setInterval(() => res.write(": ping\n\n"), 20000);
