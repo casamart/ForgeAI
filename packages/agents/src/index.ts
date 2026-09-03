@@ -79,8 +79,14 @@ export { runRepairLoop } from "./repair/repair-loop.js";
 export type {
   RepairOptions,
   RepairResult,
+  RepairStopReason,
   VerifyOutcome,
 } from "./repair/repair-loop.js";
+export {
+  classifyFailure,
+  failureSignature,
+  type FailureCategory,
+} from "./failures.js";
 
 // --- Reviewer agent + final report ---
 export { ReviewerAgent } from "./reviewer/reviewer-agent.js";

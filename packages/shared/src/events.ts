@@ -22,6 +22,7 @@ export type ForgeEventType =
   | "bug.detected"
   | "fix.started"
   | "fix.completed"
+  | "fix.failed"
   | "server.started"
   | "preview.ready"
   | "qa.started"
