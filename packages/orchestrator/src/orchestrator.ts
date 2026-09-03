@@ -24,11 +24,18 @@ import {
   runRepairLoop,
   planToDeveloperTasks,
   renderFinalReport,
+  assignCriteriaIds,
+  buildTraceability,
+  renderTraceabilityMatrix,
+  traceabilitySummary,
   type ArchitectPlan,
   type QACheck,
   type QAReport,
   type ReviewResult,
   type FailureContext,
+  type AcceptanceCriterion,
+  type ResolvedBug,
+  type TraceRow,
 } from "@forgeai/agents";
 import {
   createSolariProvider,
@@ -74,6 +81,10 @@ export interface BuildResult {
   report: string;
   events: readonly ForgeEvent[];
   durationMs: number;
+  /** Acceptance criteria with stable ids (AC-001…). */
+  criteria?: AcceptanceCriterion[];
+  /** Per-criterion traceability: test → verdict → bug → repair → evidence. */
+  traceability?: TraceRow[];
 }
 
 // Poll a URL until it responds OK, so QA never gets an unready server (arch §23).
@@ -101,6 +112,8 @@ export class Orchestrator {
 
   private state: WorkflowState = "CREATED";
   private startedAt = 0;
+  private criteria: AcceptanceCriterion[] = [];
+  private resolvedBugs: ResolvedBug[] = [];
 
   constructor(opts: OrchestratorOptions) {
     const cfg = loadConfig();
@@ -132,6 +145,8 @@ export class Orchestrator {
   /** Run the full build for one requirement. Always cleans up its resources. */
   async build(requirement: string): Promise<BuildResult> {
     this.startedAt = Date.now();
+    this.criteria = [];
+    this.resolvedBugs = [];
     const resolvedMode = resolveInfraMode(this.infraMode);
     const { provider } = createSolariProvider(this.infraMode);
 
@@ -150,6 +165,7 @@ export class Orchestrator {
       this.setState("PLANNING");
       const architect = new ArchitectAgent({ ai: this.ai, bus: this.bus, logger: this.logger });
       plan = (await architect.plan(`${requirement}\n\n${conventions}`)).plan;
+      this.criteria = assignCriteriaIds(plan.acceptanceCriteria);
 
       // 2. SANDBOX ---------------------------------------------------------
       this.setState("SANDBOX_CREATING");
@@ -248,6 +264,12 @@ export class Orchestrator {
 
       qa = await runQA();
       if (qa.failed > 0 || qa.blocked > 0) {
+        // Remember which criteria's bugs we're about to try to fix, so the
+        // traceability matrix can show them as "resolved by repair" (§57).
+        const bugsBeingFixed: ResolvedBug[] = qa.bugs.map((b) => ({
+          id: b.id,
+          acceptanceCriteriaId: b.acceptanceCriteriaId,
+        }));
         this.setState("DEBUGGING");
         const repaired = await runRepairLoop({
           debuggerAgent: new DebuggerAgent({ ai: this.ai, bus: this.bus, logger: this.logger }),
@@ -273,6 +295,8 @@ export class Orchestrator {
         if (!repaired.repaired) {
           return this.finish("FAILED", { provider, sandbox, browser }, { plan, unitTests, qa, review, previewUrl, resolvedMode });
         }
+        // The repair succeeded and QA now passes → those bugs are resolved.
+        this.resolvedBugs = bugsBeingFixed;
         this.setState("BROWSER_QA");
       }
 
@@ -370,7 +394,27 @@ export class Orchestrator {
     await res.provider.close().catch(() => {});
 
     const durationMs = Date.now() - this.startedAt;
-    const report = data.review
+
+    // Requirement traceability, built deterministically from the QA evidence.
+    const traceability = this.criteria.length
+      ? buildTraceability({
+          criteria: this.criteria,
+          qaReport: data.qa,
+          resolvedBugs: this.resolvedBugs,
+        })
+      : undefined;
+    if (traceability) {
+      const t = traceabilitySummary(traceability);
+      this.bus.emit(
+        "log",
+        `Traceability: ${t.passed}/${t.total} criteria verified` +
+          (t.repaired ? `, ${t.repaired} repaired` : "") +
+          (t.unverified ? `, ${t.unverified} unverified` : ""),
+        { ...t },
+      );
+    }
+
+    let report = data.review
       ? renderFinalReport(data.review, {
           projectName: this.projectName,
           infraMode: data.resolvedMode,
@@ -379,6 +423,9 @@ export class Orchestrator {
           durationMs,
         })
       : `Build ${finalState} before a review could be produced.`;
+    if (traceability) {
+      report += "\n\n" + renderTraceabilityMatrix(traceability);
+    }
 
     return {
       state: finalState,
@@ -392,6 +439,8 @@ export class Orchestrator {
       report,
       events: this.bus.history(),
       durationMs,
+      criteria: this.criteria.length ? this.criteria : undefined,
+      traceability,
     };
   }
 }

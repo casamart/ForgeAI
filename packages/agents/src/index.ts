@@ -16,6 +16,19 @@ export {
 } from "./architect/schema.js";
 export { ARCHITECT_SYSTEM_PROMPT } from "./architect/prompt.js";
 
+// --- Requirement traceability (AC → test → bug → repair → evidence) ---
+export {
+  assignCriteriaIds,
+  buildTraceability,
+  renderTraceabilityMatrix,
+  traceabilitySummary,
+  type AcceptanceCriterion,
+  type ACStatus,
+  type TraceRow,
+  type ResolvedBug,
+  type TraceabilityInput,
+} from "./traceability.js";
+
 // --- QA agent ---
 export { QAAgent } from "./qa/qa-agent.js";
 export type { QAContext, QARunParams } from "./qa/qa-agent.js";

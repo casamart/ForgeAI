@@ -157,6 +157,8 @@ export function toDetail(r: ProjectRecord) {
       : undefined,
     review: r.result?.review,
     plan: r.result?.plan,
+    criteria: r.result?.criteria,
+    traceability: r.result?.traceability,
     eventCount: r.bus.history().length,
   };
 }

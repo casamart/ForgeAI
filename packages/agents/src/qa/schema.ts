@@ -23,6 +23,8 @@ export const QACheckSchema = z.object({
   expectBodyIncludes: z.array(z.string()).optional(),
   /** If true, needs a real DOM browser (clicks, JS). Skipped honestly if not. */
   requiresRealBrowser: z.boolean().optional(),
+  /** The acceptance criterion this check verifies, e.g. "AC-003" (traceability). */
+  acceptanceCriteriaId: z.string().optional(),
 });
 
 export type QACheck = z.infer<typeof QACheckSchema>;
@@ -52,6 +54,10 @@ export interface Bug {
   severity: "low" | "medium" | "high";
   description: string;
   evidence: Evidence[];
+  /** The QA check that found this bug (traceability). */
+  checkId?: string;
+  /** The acceptance criterion this bug violates (traceability). */
+  acceptanceCriteriaId?: string;
 }
 
 export interface QAReport {

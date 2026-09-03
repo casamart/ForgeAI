@@ -38,6 +38,10 @@ async function main(): Promise<number> {
 
   console.log("\n" + result.report + "\n");
 
+  // Traceability: AC-003 must have been failed by a bug, repaired, now passing.
+  const trace = result.traceability ?? [];
+  const ac3 = trace.find((r) => r.criterion.id === "AC-003");
+
   // Evidence pulled from the real run + its event stream.
   const bugDetected = types.includes("bug.detected");
   const repaired = types.includes("fix.completed");
@@ -49,6 +53,8 @@ async function main(): Promise<number> {
     { name: "QA re-verified after the fix (0 failing)", passed: result.qa?.failed === 0 && (result.qa?.passed ?? 0) >= 1, evidence: `QA ${result.qa?.passed}/${result.qa?.total} passed, ${result.qa?.failed} failing` },
     { name: "workflow COMPLETED with review PASS", passed: result.state === "COMPLETED" && result.review?.status === "passed", evidence: `state=${result.state}, verdict=${result.review?.status}` },
     { name: "preview URL produced", passed: !!result.previewUrl, evidence: `${result.previewUrl}` },
+    { name: "traceability: all 3 criteria verified", passed: trace.length === 3 && trace.every((r) => r.status === "passed"), evidence: `${trace.map((r) => `${r.criterion.id}=${r.status}`).join(" ")}` },
+    { name: "AC-003 traced: bug → repair → pass", passed: !!ac3 && ac3.status === "passed" && ac3.repaired && ac3.resolvedBugIds.length >= 1 && ac3.checkIds.includes("TC-PROFILE"), evidence: `AC-003 checks=[${ac3?.checkIds.join(",")}] resolved=[${ac3?.resolvedBugIds.join(",")}] repaired=${ac3?.repaired}` },
   ];
   const passed = checks.filter((c) => c.passed).length;
   const allPass = passed === checks.length;

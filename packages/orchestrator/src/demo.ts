@@ -62,12 +62,22 @@ const DEV_ACTIONS = [
 
 const QA_CHECKS = JSON.stringify([
   {
-    id: "TC-001",
+    id: "TC-LIST",
+    description: "GET /workers lists the seeded workers",
+    path: "/workers",
+    method: "GET",
+    expectStatus: 200,
+    expectBodyIncludes: ["Amaka O."],
+    acceptanceCriteriaId: "AC-001",
+  },
+  {
+    id: "TC-AVG",
     description: "GET /workers computes averageRating 4.25",
     path: "/workers",
     method: "GET",
     expectStatus: 200,
     expectBodyIncludes: ["4.25"],
+    acceptanceCriteriaId: "AC-002",
   },
 ]);
 
@@ -314,14 +324,35 @@ const WEB_PLAN = JSON.stringify({
   ],
 });
 
+// Each check links to the acceptance criterion it verifies (AC-001..3), so the
+// traceability matrix can map requirement -> test -> verdict -> bug -> repair.
 const WEB_QA_CHECKS = JSON.stringify([
   {
+    id: "TC-DIR",
+    description: "Directory lists workers with name and category",
+    path: "/workers",
+    method: "GET",
+    expectStatus: 200,
+    expectBodyIncludes: ["worker-list", "Chinedu E."],
+    acceptanceCriteriaId: "AC-001",
+  },
+  {
+    id: "TC-SHOWS",
+    description: "Worker 1 profile shows a rating value",
+    path: "/workers/1",
+    method: "GET",
+    expectStatus: 200,
+    expectBodyIncludes: ["worker-rating"],
+    acceptanceCriteriaId: "AC-002",
+  },
+  {
     id: "TC-PROFILE",
-    description: "Worker 1 profile shows average rating 4.67",
+    description: "Worker 1 profile shows the correct average rating 4.67",
     path: "/workers/1",
     method: "GET",
     expectStatus: 200,
     expectBodyIncludes: ["4.67"],
+    acceptanceCriteriaId: "AC-003",
   },
 ]);
 

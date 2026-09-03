@@ -119,6 +119,8 @@ export class QAAgent {
           severity: result.verdict === "BLOCKED" ? "high" : "medium",
           description: result.reason,
           evidence: result.evidence,
+          checkId: check.id,
+          acceptanceCriteriaId: check.acceptanceCriteriaId,
         };
         bugs.push(bug);
         bus.emit("bug.detected", `${bug.id}: ${bug.title}`, { id: bug.id });
