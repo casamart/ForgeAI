@@ -16,6 +16,28 @@ export {
 } from "./architect/schema.js";
 export { ARCHITECT_SYSTEM_PROMPT } from "./architect/prompt.js";
 
+// --- Browser action model + journey runner (§8, §9) ---
+export {
+  TargetSchema,
+  BrowserActionSchema,
+  BrowserActionsSchema,
+  BrowserJourneySchema,
+  BROWSER_ACTIONS_HINT,
+  targetToSelector,
+  describeTarget,
+  describeAction,
+  type Target,
+  type BrowserAction,
+  type BrowserJourney,
+} from "./browser/actions.js";
+export {
+  runJourney,
+  type JourneyResult,
+  type StepResult,
+  type StepStatus,
+  type RunJourneyOptions,
+} from "./browser/journey-runner.js";
+
 // --- Requirement traceability (AC → test → bug → repair → evidence) ---
 export {
   assignCriteriaIds,

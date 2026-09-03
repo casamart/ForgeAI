@@ -31,6 +31,15 @@ export const ArchitectPlanSchema = z.object({
     .min(1)
     .describe("Plain statements that must all be true when done."),
   testPlan: z.array(TestCaseSchema).min(1).describe("Cases QA will verify."),
+  browserJourneys: z
+    .array(
+      z.object({
+        name: z.string(),
+        steps: z.array(z.string()).min(1).describe("Prose user-journey steps."),
+      }),
+    )
+    .optional()
+    .describe("End-to-end user journeys QA should walk in a browser (§5)."),
 });
 
 export type ArchitectPlan = z.infer<typeof ArchitectPlanSchema>;

@@ -28,6 +28,13 @@ import {
   type QAVerdict,
 } from "./schema.js";
 import { QA_SYSTEM_PROMPT } from "./prompt.js";
+import {
+  BrowserActionsSchema,
+  BROWSER_ACTIONS_HINT,
+  type BrowserAction,
+  type BrowserJourney,
+} from "../browser/actions.js";
+import { runJourney, type JourneyResult } from "../browser/journey-runner.js";
 
 export interface QAContext {
   ai: AIProvider;
@@ -76,6 +83,69 @@ export class QAAgent {
       { schemaHint: QA_CHECKS_HINT, maxTokens: 4096 },
     );
     return data;
+  }
+
+  /**
+   * Turn a prose user journey (from the Architect) into concrete browser
+   * actions. The AI plans; the JourneyRunner executes deterministically (§60).
+   */
+  async deriveJourney(params: {
+    name: string;
+    proseSteps: string[];
+    hints?: string;
+  }): Promise<BrowserAction[]> {
+    const messages: ChatMessage[] = [
+      { role: "system", content: QA_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `Convert this user journey into concrete browser steps.\n\n` +
+          `Journey: ${params.name}\n` +
+          `Steps:\n- ${params.proseSteps.join("\n- ")}\n\n` +
+          (params.hints ? `Available elements:\n${params.hints}\n\n` : "") +
+          `Prefer targeting by testId. Return ONLY the JSON array.`,
+      },
+    ];
+    const { data } = await this.ctx.ai.structuredOutput(
+      messages,
+      BrowserActionsSchema,
+      { schemaHint: BROWSER_ACTIONS_HINT, maxTokens: 3072 },
+    );
+    return data;
+  }
+
+  /**
+   * Run one browser journey against the preview and report an honest verdict.
+   * (Interactive steps are INCONCLUSIVE on the local http-only browser.)
+   */
+  async runJourney(params: {
+    previewUrl: string;
+    journey: BrowserJourney;
+    browser: IBrowser;
+    screenshotDir?: string;
+  }): Promise<JourneyResult> {
+    const { bus, logger } = this.ctx;
+    bus.emit("qa.started", `Journey "${params.journey.name}"`, {
+      journey: params.journey.name,
+      realBrowser: params.browser.isRealBrowser,
+    });
+    const page = await params.browser.newPage();
+    const result = await runJourney(page, params.previewUrl, params.journey, {
+      screenshotDir: params.screenshotDir,
+    });
+    for (const s of result.steps) {
+      logger.info(`  ${s.status.toUpperCase().padEnd(12)} ${s.label} — ${s.detail}`);
+    }
+    bus.emit(
+      result.verdict === "PASS" ? "qa.passed" : "qa.failed",
+      `Journey "${result.name}" ${result.verdict}`,
+      { journey: result.name, verdict: result.verdict },
+    );
+    (result.verdict === "PASS" ? logger.success : logger.warn).call(
+      logger,
+      `Journey "${result.name}": ${result.verdict}`,
+    );
+    return result;
   }
 
   /** Run all checks against the preview URL and produce a QA report. */

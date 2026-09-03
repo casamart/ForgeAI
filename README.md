@@ -27,6 +27,8 @@ npm run ai:smoke       # AI layer proof (mock provider, no API key needed)
 npm run dev:smoke      # Developer Agent proof: build + test in a sandbox
 npm run arch:smoke     # Architect → Developer handoff: plan → build → test
 npm run qa:smoke       # QA Agent proof: browser checks with honest verdicts
+npm run journey:smoke  # Browser JOURNEYS: nav+assert PASS, interactive step
+                       #   honestly INCONCLUSIVE on the local http-only browser
 npm run dbg:smoke      # Autonomous repair: plant a bug → diagnose → fix → verify
 npm run rev:smoke      # Reviewer: evidence-gated verdict + engineering report
 npm run demo           # FULL PIPELINE: requirement → tested app + report
