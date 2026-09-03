@@ -12,7 +12,7 @@
  * - Browser  -> an HTTP-probe stand-in (fetch). It is NOT a real DOM browser,
  *               so click/fill/evaluate honestly throw NotSupportedError.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -33,6 +33,34 @@ import { NotSupportedError } from "./types.js";
 interface ChildHandle {
   pid: number | undefined;
   kill: () => void;
+}
+
+/**
+ * Kill a background process AND its children. With shell:true the tracked pid is
+ * the shell's, so a plain kill leaves the real server (e.g. `node server.js`)
+ * holding its port — which breaks restart-after-repair. Do it synchronously so
+ * the port is free before anything rebinds.
+ */
+function killTree(pid: number | undefined): void {
+  if (pid === undefined) return;
+  if (process.platform === "win32") {
+    try {
+      spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+    } catch {
+      /* already gone */
+    }
+  } else {
+    // detached:true on POSIX gives the child its own process group (-pid).
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        /* already gone */
+      }
+    }
+  }
 }
 
 class LocalSandbox implements ISandbox {
@@ -78,12 +106,14 @@ class LocalSandbox implements ISandbox {
     const child = spawn(commandLine, {
       cwd,
       shell: true,
-      detached: false,
+      // POSIX: own process group so killTree can signal the whole group.
+      detached: process.platform !== "win32",
       stdio: "ignore",
       env: { ...process.env, ...opts.env },
     });
     child.unref();
-    this.children.push({ pid: child.pid, kill: () => child.kill() });
+    const pid = child.pid;
+    this.children.push({ pid, kill: () => killTree(pid) });
     // Give the process a beat to bind its port before callers request preview.
     await new Promise((r) => setTimeout(r, 300));
   }
@@ -98,7 +128,7 @@ class LocalSandbox implements ISandbox {
     }
     this.children = [];
     // Let the OS release the port before anything rebinds it.
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 500));
   }
 
   private spawn(

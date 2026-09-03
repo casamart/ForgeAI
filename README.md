@@ -31,6 +31,8 @@ npm run dbg:smoke      # Autonomous repair: plant a bug → diagnose → fix →
 npm run rev:smoke      # Reviewer: evidence-gated verdict + engineering report
 npm run demo           # FULL PIPELINE: requirement → tested app + report
 npm run demo:repair    # SAME, but a bug is injected → autonomous repair loop
+npm run demo:web       # BEHAVIORAL bug: real web app renders a wrong rating,
+                       #   browser QA catches it → autonomous repair → re-verify
 npm run api            # HTTP API + live SSE event stream (see below)
 npm run web            # Dashboard UI (Next.js) — run alongside `npm run api`
 ```

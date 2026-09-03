@@ -15,5 +15,7 @@ export { parseTestOutput, type TestCounts } from "./test-parser.js";
 export {
   createDemoAIProvider,
   createRepairDemoAIProvider,
+  createBehavioralDemoAIProvider,
   DEMO_REQUIREMENT,
+  WEB_REQUIREMENT,
 } from "./demo.js";
