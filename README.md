@@ -450,6 +450,22 @@ forgeai/
 
 ---
 
+## Documentation
+
+| Doc | What it covers |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | System + agent architecture |
+| [docs/agents.md](docs/agents.md) | The five agents and their roles |
+| [docs/BROWSER-QA.md](docs/BROWSER-QA.md) | Browser checks, journeys, targeting, honest verdicts |
+| [docs/EVIDENCE.md](docs/EVIDENCE.md) | The evidence model and how it drives PASS/FAIL |
+| [docs/REPAIR-LOOP.md](docs/REPAIR-LOOP.md) | Classification, signatures, bounded + stall-aware repair |
+| [docs/DEMO.md](docs/DEMO.md) | The three demos + all runnable proofs |
+| [docs/security.md](docs/security.md) | Sandbox isolation, key protection, resource limits |
+| [docs/database.md](docs/database.md) | Persistence design |
+| [docs/roadmap.md](docs/roadmap.md) | Phased plan |
+
+---
+
 ## 11. First Demonstration
 
 The primary demonstration project is a Nigerian worker marketplace API.
