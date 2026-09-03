@@ -38,6 +38,7 @@ app.get("/", (_req, res) => {
       "POST /api/projects": "Start a build { requirement, name?, demo? }",
       "GET /api/projects": "List builds",
       "GET /api/projects/:id": "Build detail + final report",
+      "POST /api/projects/:id/cancel": "Cancel a running build",
       "GET /api/projects/:id/events": "Live event stream (SSE)",
     },
   });
@@ -75,6 +76,14 @@ app.get("/api/projects/:id", (req, res) => {
   const record = store.get(req.params.id);
   if (!record) return res.status(404).json({ error: "not found" });
   res.json(toDetail(record));
+});
+
+// Cancel a running build (§22). Cooperative: the orchestrator stops at its
+// next checkpoint, cleans up, and ends in CANCELLED.
+app.post("/api/projects/:id/cancel", (req, res) => {
+  const result = store.cancel(req.params.id);
+  if (!result) return res.status(404).json({ error: "not found" });
+  res.json({ id: req.params.id, cancelling: result.ok, status: result.status });
 });
 
 // Live event stream (SSE). Replays history, then streams new events live.

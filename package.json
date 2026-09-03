@@ -20,6 +20,7 @@
     "rev:smoke": "npm run start --workspace @forgeai/example-reviewer-smoke",
     "journey:smoke": "npm run start --workspace @forgeai/example-journey-smoke",
     "fail:smoke": "npm run start --workspace @forgeai/example-failure-smoke",
+    "state:smoke": "npm run start --workspace @forgeai/example-state-smoke",
     "demo": "npm run start --workspace @forgeai/example-forge-marketplace",
     "demo:repair": "npm run start --workspace @forgeai/example-forge-repair",
     "demo:web": "npm run start --workspace @forgeai/example-forge-behavioral",

@@ -31,6 +31,8 @@ npm run journey:smoke  # Browser JOURNEYS: nav+assert PASS, interactive step
                        #   honestly INCONCLUSIVE on the local http-only browser
 npm run fail:smoke     # Failure classification + signatures; a fix that never
                        #   works is stopped early with REPAIR_STALLED
+npm run state:smoke    # State-machine guards reject illegal jumps; a build is
+                       #   cancelled cooperatively → CANCELLED (with cleanup)
 npm run dbg:smoke      # Autonomous repair: plant a bug → diagnose → fix → verify
 npm run rev:smoke      # Reviewer: evidence-gated verdict + engineering report
 npm run demo           # FULL PIPELINE: requirement → tested app + report

@@ -17,7 +17,7 @@ import {
 } from "@forgeai/orchestrator";
 import { EventBus, Logger, type AiProvider } from "@forgeai/shared";
 
-export type ProjectStatus = "running" | "completed" | "failed";
+export type ProjectStatus = "running" | "completed" | "failed" | "cancelled";
 
 export interface ProjectSummary {
   id: string;
@@ -32,6 +32,7 @@ export interface ProjectSummary {
 
 interface ProjectRecord extends ProjectSummary {
   bus: EventBus;
+  orchestrator: Orchestrator;
   result?: BuildResult;
   error?: string;
 }
@@ -70,38 +71,45 @@ export class ProjectStore {
     const requirement =
       input.requirement?.trim() || DEMO_REQUIREMENT;
 
-    const record: ProjectRecord = {
-      id,
-      name: input.name?.trim() || "ForgeAI Project",
-      requirement,
-      status: "running",
-      createdAt: Date.now(),
-      demo: useDemo,
-      bus,
-    };
-    this.projects.set(id, record);
-
     const ai = useDemo
       ? input.scenario === "repair"
         ? createRepairDemoAIProvider()
         : createDemoAIProvider()
       : createAIProvider(configured as AiProvider);
+    const name = input.name?.trim() || "ForgeAI Project";
     const logger = new Logger({ scope: `proj:${id.slice(0, 8)}`, bus });
     const orchestrator = new Orchestrator({
       ai,
       // infraMode omitted -> Orchestrator reads FORGEAI_MODE (default "auto").
-      projectName: record.name,
+      projectName: name,
       port: this.nextPort++,
       bus,
       logger,
     });
+
+    const record: ProjectRecord = {
+      id,
+      name,
+      requirement,
+      status: "running",
+      createdAt: Date.now(),
+      demo: useDemo,
+      bus,
+      orchestrator,
+    };
+    this.projects.set(id, record);
 
     // Fire and forget — SSE streams progress; the record is updated on finish.
     orchestrator
       .build(requirement)
       .then((result) => {
         record.result = result;
-        record.status = result.state === "COMPLETED" ? "completed" : "failed";
+        record.status =
+          result.state === "COMPLETED"
+            ? "completed"
+            : result.state === "CANCELLED"
+              ? "cancelled"
+              : "failed";
         record.verdict = result.review?.status;
         record.durationMs = result.durationMs;
       })
@@ -116,6 +124,14 @@ export class ProjectStore {
 
   get(id: string): ProjectRecord | undefined {
     return this.projects.get(id);
+  }
+
+  /** Request cooperative cancellation of a running build (§22). */
+  cancel(id: string): { ok: boolean; status: ProjectStatus } | undefined {
+    const record = this.projects.get(id);
+    if (!record) return undefined;
+    if (record.status === "running") record.orchestrator.cancel();
+    return { ok: record.status === "running", status: record.status };
   }
 
   list(): ProjectSummary[] {

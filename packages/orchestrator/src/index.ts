@@ -4,7 +4,10 @@ export type { OrchestratorOptions, BuildResult } from "./orchestrator.js";
 export {
   type WorkflowState,
   TERMINAL_STATES,
+  TRANSITIONS,
   isTerminal,
+  canTransition,
+  assertTransition,
 } from "./state.js";
 export {
   projectConventions,

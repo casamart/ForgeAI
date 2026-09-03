@@ -55,7 +55,7 @@ import {
   type InfraMode,
   type ResourceLimits,
 } from "@forgeai/shared";
-import { isTerminal, type WorkflowState } from "./state.js";
+import { isTerminal, assertTransition, type WorkflowState } from "./state.js";
 import { projectConventions, TEST_COMMAND, START_COMMAND } from "./conventions.js";
 import { parseTestOutput } from "./test-parser.js";
 
@@ -117,6 +117,7 @@ export class Orchestrator {
 
   private state: WorkflowState = "CREATED";
   private startedAt = 0;
+  private cancelRequested = false;
   private criteria: AcceptanceCriterion[] = [];
   private resolvedBugs: ResolvedBug[] = [];
   private lastUnitOutput = "";
@@ -140,6 +141,8 @@ export class Orchestrator {
   }
 
   private setState(state: WorkflowState): void {
+    // Reject impossible transitions so a corrupted run can't continue (§51).
+    assertTransition(this.state, state);
     this.state = state;
     this.logger.step(`state → ${state}`);
     this.bus.emit("log", `state → ${state}`, { state });
@@ -147,6 +150,17 @@ export class Orchestrator {
 
   private overBudget(): boolean {
     return Date.now() - this.startedAt > this.limits.maxBuildTimeMs;
+  }
+
+  /**
+   * Request cooperative cancellation (§22). The build checks this at phase
+   * boundaries, then transitions CANCELLING → cleanup → CANCELLED.
+   */
+  cancel(): void {
+    if (isTerminal(this.state)) return;
+    this.cancelRequested = true;
+    this.bus.emit("log", "Cancellation requested", { state: this.state });
+    this.logger.warn("Cancellation requested — will stop at the next checkpoint.");
   }
 
   /** Run the full build for one requirement. Always cleans up its resources. */
@@ -181,6 +195,11 @@ export class Orchestrator {
       sandbox = await provider.createSandbox({ template: "base" });
       await sandbox.connect();
       this.bus.emit("sandbox.created", `Sandbox ${sandbox.id}`, { id: sandbox.id });
+
+      if (this.cancelRequested) {
+        this.setState("CANCELLING");
+        return this.finish("CANCELLED", { provider, sandbox, browser }, { plan, unitTests, qa, review, previewUrl, resolvedMode });
+      }
 
       // 3. IMPLEMENTING ----------------------------------------------------
       this.setState("IMPLEMENTING");
@@ -221,6 +240,7 @@ export class Orchestrator {
             relevantFiles: ["server.js"],
           },
           verify: async () => {
+            this.setState("REGRESSION_TESTING");
             const r = await runUnitTests();
             return {
               passed: r.passed,
@@ -247,6 +267,10 @@ export class Orchestrator {
 
       if (this.overBudget()) {
         return this.finish("FAILED", { provider, sandbox, browser }, { plan, unitTests, qa, review, previewUrl, resolvedMode });
+      }
+      if (this.cancelRequested) {
+        this.setState("CANCELLING");
+        return this.finish("CANCELLED", { provider, sandbox, browser }, { plan, unitTests, qa, review, previewUrl, resolvedMode });
       }
 
       // 5. APP STARTING + health gate --------------------------------------
@@ -286,6 +310,7 @@ export class Orchestrator {
           developer,
           failure: this.qaFailure(qa),
           verify: async () => {
+            this.setState("REGRESSION_TESTING");
             // Restart the server so the fix takes effect, then re-run QA.
             await sandbox!.stopBackground();
             await sandbox!.startBackground(START_COMMAND, { cwd: this.workspace, env: { PORT: String(this.port) } });
@@ -309,6 +334,14 @@ export class Orchestrator {
         this.resolvedBugs = bugsBeingFixed;
         this.setState("BROWSER_QA");
       }
+
+      if (this.cancelRequested) {
+        this.setState("CANCELLING");
+        return this.finish("CANCELLED", { provider, sandbox, browser }, { plan, unitTests, qa, review, previewUrl, resolvedMode });
+      }
+
+      // 6.5 EVIDENCE COLLECTION --------------------------------------------
+      this.setState("EVIDENCE_COLLECTION");
 
       // 7. FINAL REVIEW ----------------------------------------------------
       this.setState("FINAL_REVIEW");
@@ -390,10 +423,13 @@ export class Orchestrator {
     },
   ): Promise<BuildResult> {
     this.setState(finalState);
-    this.bus.emit(
-      finalState === "COMPLETED" ? "project.completed" : "project.failed",
-      `Build ${finalState}`,
-    );
+    const terminalEvent =
+      finalState === "COMPLETED"
+        ? "project.completed"
+        : finalState === "CANCELLED"
+          ? "project.cancelled"
+          : "project.failed";
+    this.bus.emit(terminalEvent, `Build ${finalState}`);
 
     // Cleanup (spec §28.4): always release Solari resources.
     if (res.browser) await res.browser.close().catch(() => {});

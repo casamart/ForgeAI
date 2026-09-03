@@ -33,6 +33,7 @@ export type ForgeEventType =
   | "review.completed"
   | "project.completed"
   | "project.failed"
+  | "project.cancelled"
   | "log";
 
 export interface ForgeEvent {
