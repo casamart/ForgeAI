@@ -103,9 +103,10 @@ class SolariSandbox implements ISandbox {
 
   async listDir(path: string): Promise<DirEntry[]> {
     const entries = await this.handle.files.list(path);
+    // Real Solari FsEntry is { name, dir: boolean, size }.
     return (entries ?? []).map((e: any): DirEntry => ({
       name: e.name,
-      type: e.type === "dir" || e.isDir ? "dir" : "file",
+      type: e.dir ? "dir" : "file",
     }));
   }
 
