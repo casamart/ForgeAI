@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  cancelBuild,
   eventStreamUrl,
   getProject,
   startBuild,
@@ -82,7 +83,8 @@ export default function Dashboard() {
 
   const [projectId, setProjectId] = useState<string | null>(null);
   const [events, setEvents] = useState<ForgeEvent[]>([]);
-  const [status, setStatus] = useState<"idle" | "running" | "completed" | "failed">("idle");
+  const [status, setStatus] = useState<"idle" | "running" | "completed" | "failed" | "cancelled">("idle");
+  const [cancelling, setCancelling] = useState(false);
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,20 +112,50 @@ export default function Dashboard() {
       seen.current.add(e.id);
       setEvents((prev) => [...prev, e]);
 
-      if (e.type === "project.completed" || e.type === "project.failed") {
+      if (
+        e.type === "project.completed" ||
+        e.type === "project.failed" ||
+        e.type === "project.cancelled"
+      ) {
         es.close();
+        const terminal =
+          e.type === "project.completed"
+            ? "completed"
+            : e.type === "project.cancelled"
+              ? "cancelled"
+              : "failed";
         getProject(projectId)
           .then((d) => {
             setDetail(d);
-            setStatus(d.status === "completed" ? "completed" : "failed");
+            setStatus((d.status as typeof status) ?? terminal);
           })
-          .catch(() => setStatus(e.type === "project.completed" ? "completed" : "failed"));
+          .catch(() => setStatus(terminal));
       }
     };
     es.onerror = () => {
       // The stream ends when the server closes it after completion; that's fine.
     };
-    return () => es.close();
+
+    // Belt-and-suspenders: also poll for the final result, so the panels render
+    // even if a terminal SSE event is missed (dev double-mount, reconnects, …).
+    const poll = setInterval(async () => {
+      try {
+        const d = await getProject(projectId);
+        if (d.status !== "running") {
+          setDetail(d);
+          setStatus(d.status);
+          clearInterval(poll);
+          es.close();
+        }
+      } catch {
+        /* keep polling */
+      }
+    }, 2000);
+
+    return () => {
+      es.close();
+      clearInterval(poll);
+    };
   }, [projectId]);
 
   async function onStart() {
@@ -140,9 +172,21 @@ export default function Dashboard() {
         scenario: repair ? "repair" : "happy",
       });
       setProjectId(id);
+      setCancelling(false);
     } catch (err) {
       setError((err as Error).message);
       setStatus("idle");
+    }
+  }
+
+  async function onCancel() {
+    if (!projectId) return;
+    setCancelling(true);
+    try {
+      await cancelBuild(projectId);
+    } catch (err) {
+      setError((err as Error).message);
+      setCancelling(false);
     }
   }
 
@@ -155,10 +199,19 @@ export default function Dashboard() {
     return status === "idle" ? "" : "PLANNING";
   }, [events, status]);
 
-  // DEBUGGING is a transient detour (the repair loop). Keep the timeline steady
-  // at the phase being repaired and flag that a repair is in progress.
-  const repairing = currentState === "DEBUGGING";
-  const effectiveState = repairing ? "UNIT_TESTING" : currentState;
+  // DEBUGGING / REGRESSION_TESTING are transient repair detours; EVIDENCE_COLLECTION
+  // is a brief step before review. Keep the timeline steady on the last state that
+  // is actually in the timeline, and flag when a repair is in progress.
+  const repairing = currentState === "DEBUGGING" || currentState === "REGRESSION_TESTING";
+  const timelineStates = useMemo(() => new Set(TIMELINE.map((t) => t.state)), []);
+  const effectiveState = useMemo(() => {
+    if (timelineStates.has(currentState)) return currentState;
+    for (let i = events.length - 1; i >= 0; i--) {
+      const m = /state →\s*([A-Z_]+)/.exec(events[i].message);
+      if (m && timelineStates.has(m[1])) return m[1];
+    }
+    return currentState;
+  }, [currentState, events, timelineStates]);
   const currentIndex = TIMELINE.findIndex((t) => t.state === effectiveState);
 
   // Live counters derived from the event stream.
@@ -248,13 +301,15 @@ export default function Dashboard() {
             />
             <label htmlFor="repair">Inject a bug — show the self-repair loop</label>
           </div>
-          <button
-            className="primary"
-            onClick={onStart}
-            disabled={status === "running"}
-          >
-            {status === "running" ? "Building…" : "▶ Start build"}
-          </button>
+          {status === "running" ? (
+            <button className="danger" onClick={onCancel} disabled={cancelling}>
+              {cancelling ? "Cancelling…" : "■ Cancel build"}
+            </button>
+          ) : (
+            <button className="primary" onClick={onStart}>
+              ▶ Start build
+            </button>
+          )}
           {error && <div className="err">{error}</div>}
           <div className="hint">
             The build runs on the API server and streams here live over SSE.
@@ -356,7 +411,7 @@ export default function Dashboard() {
           </div>
 
           {/* Results (after completion) */}
-          {detail && (detail.status === "completed" || detail.status === "failed") && (
+          {detail && detail.status !== "running" && (
             <div className="card">
               <h2>Result</h2>
               <div className="stats">
@@ -402,6 +457,50 @@ export default function Dashboard() {
                       {b.id} — {b.title}
                     </div>
                   ))}
+                </>
+              )}
+
+              {/* Requirement traceability: AC → test → bug → repair (§57) */}
+              {detail.traceability && detail.traceability.length > 0 && (
+                <>
+                  <div className="space" />
+                  <h2>Requirement traceability</h2>
+                  <div className="trace">
+                    {detail.traceability.map((row) => (
+                      <div className="trace-row" key={row.criterion.id}>
+                        <span className={`tstat ${row.status}`}>
+                          {row.status === "passed" ? (row.repaired ? "✓ repaired" : "✓") : row.status === "failed" ? "✗" : "○"}
+                        </span>
+                        <span className="tid">{row.criterion.id}</span>
+                        <span className="ttext">
+                          {row.criterion.text}
+                          {(row.checkIds.length > 0 || row.resolvedBugIds.length > 0) && (
+                            <span className="tev">
+                              {row.checkIds.join(", ")}
+                              {row.resolvedBugIds.length > 0 && ` · ${row.resolvedBugIds.join(", ")} fixed`}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Evidence viewer (§16): hashed, immutable artifacts */}
+              {detail.evidence && detail.evidence.length > 0 && (
+                <>
+                  <div className="space" />
+                  <h2>Evidence · {detail.evidence.length} artifacts</h2>
+                  <div className="evidence">
+                    {detail.evidence.map((ev) => (
+                      <div className="eitem" key={ev.id}>
+                        <span className="etype">{ev.type}</span>
+                        <span className="etitle">{ev.title}</span>
+                        <span className="ehash" title="content hash (tamper-evident)">#{ev.hash}</span>
+                      </div>
+                    ))}
+                  </div>
                 </>
               )}
 

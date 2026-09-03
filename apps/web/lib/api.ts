@@ -15,11 +15,33 @@ export interface ForgeEvent {
   metadata?: Record<string, unknown>;
 }
 
+export interface TraceRow {
+  criterion: { id: string; text: string };
+  status: "passed" | "failed" | "unverified";
+  checkIds: string[];
+  openBugIds: string[];
+  resolvedBugIds: string[];
+  repaired: boolean;
+  evidence: string[];
+}
+
+export interface EvidenceItem {
+  id: string;
+  type: string;
+  title: string;
+  description?: string;
+  source: string;
+  timestamp: string;
+  hash: string;
+  relatedCheckId?: string;
+  relatedCriteriaId?: string;
+}
+
 export interface ProjectDetail {
   id: string;
   name: string;
   requirement: string;
-  status: "running" | "completed" | "failed";
+  status: "running" | "completed" | "failed" | "cancelled";
   verdict?: string;
   demo: boolean;
   createdAt: number;
@@ -36,6 +58,8 @@ export interface ProjectDetail {
     bugs: { id: string; title: string; severity: string }[];
   };
   review?: { status: string; requirementsSatisfied: number };
+  traceability?: TraceRow[];
+  evidence?: EvidenceItem[];
   eventCount?: number;
 }
 
@@ -60,6 +84,12 @@ export async function startBuild(input: {
 export async function getProject(id: string): Promise<ProjectDetail> {
   const res = await fetch(`${API_BASE}/api/projects/${id}`);
   if (!res.ok) throw new Error(`Could not load project (${res.status})`);
+  return res.json();
+}
+
+export async function cancelBuild(id: string): Promise<{ cancelling: boolean; status: string }> {
+  const res = await fetch(`${API_BASE}/api/projects/${id}/cancel`, { method: "POST" });
+  if (!res.ok) throw new Error(`Could not cancel (${res.status})`);
   return res.json();
 }
 

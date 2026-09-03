@@ -394,3 +394,55 @@ button.ghost {
   border-radius: 8px;
   font-size: 13px;
 }
+
+/* --- Cancel button + cancelled badge (slice 7) --- */
+button.danger {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--red) 55%, var(--border));
+  background: color-mix(in srgb, var(--red) 16%, var(--panel));
+  color: var(--red);
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.danger:disabled { opacity: 0.6; cursor: default; }
+.badge.cancelled .dot { background: var(--amber); }
+
+/* --- Requirement traceability --- */
+.trace { display: flex; flex-direction: column; gap: 6px; }
+.trace-row {
+  display: grid;
+  grid-template-columns: 84px 58px 1fr;
+  align-items: start;
+  gap: 8px;
+  padding: 7px 9px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.tstat { font-weight: 700; white-space: nowrap; }
+.tstat.passed { color: var(--green); }
+.tstat.failed { color: var(--red); }
+.tstat.unverified { color: var(--muted); }
+.tid { font-family: var(--mono); color: var(--accent); }
+.ttext { color: var(--text); }
+.tev { display: block; margin-top: 2px; color: var(--muted); font-family: var(--mono); font-size: 11px; }
+
+/* --- Evidence viewer --- */
+.evidence { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; }
+.eitem {
+  display: grid;
+  grid-template-columns: 130px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 9px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 12px;
+}
+.etype { font-family: var(--mono); color: var(--violet); font-size: 11px; }
+.etitle { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ehash { font-family: var(--mono); color: var(--muted); font-size: 11px; }
