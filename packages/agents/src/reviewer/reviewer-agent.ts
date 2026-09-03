@@ -44,7 +44,10 @@ function describeEvidence(input: ReviewInput): string {
 
 /**
  * Derive the final verdict from the hard evidence.
- * - FAIL if the build is broken, or any test/QA check FAILED or was BLOCKED.
+ * - FAIL if the build is broken, or a test/QA check actually FAILED.
+ * - BLOCKED if we could not exercise the app at all (nothing was verified, or
+ *   every QA check was blocked) — honestly "couldn't tell", not a pass or a
+ *   plain fail (§13).
  * - PARTIAL if it basically works but has open bugs, inconclusive QA, or an
  *   unmet acceptance criterion.
  * - PASS only when everything checks out.
@@ -53,17 +56,21 @@ function deriveStatus(
   input: ReviewInput,
   requirementsSatisfied: number,
 ): ReviewStatus {
+  if (!input.buildOk) return "failed";
+
+  const b = input.browserTests;
+  const qaTotal = b.passed + b.failed + b.blocked + b.inconclusive;
+  const nothingVerified =
+    input.unitTests.passed + input.unitTests.failed === 0 && qaTotal === 0;
+  const qaAllBlocked = qaTotal > 0 && b.passed === 0 && b.failed === 0 && b.blocked > 0;
+  if (nothingVerified || qaAllBlocked) return "blocked";
+
   const hardFail =
-    !input.buildOk ||
-    input.unitTests.failed > 0 ||
-    input.browserTests.failed > 0 ||
-    input.browserTests.blocked > 0;
+    input.unitTests.failed > 0 || b.failed > 0 || b.blocked > 0;
   if (hardFail) return "failed";
 
   const soft =
-    input.openBugs.length > 0 ||
-    input.browserTests.inconclusive > 0 ||
-    requirementsSatisfied < 1;
+    input.openBugs.length > 0 || b.inconclusive > 0 || requirementsSatisfied < 1;
   return soft ? "partial" : "passed";
 }
 

@@ -28,6 +28,9 @@ import {
   buildTraceability,
   renderTraceabilityMatrix,
   traceabilitySummary,
+  EvidenceLog,
+  collectQAEvidence,
+  type EvidenceItem,
   type ArchitectPlan,
   type QACheck,
   type QAReport,
@@ -85,6 +88,8 @@ export interface BuildResult {
   criteria?: AcceptanceCriterion[];
   /** Per-criterion traceability: test → verdict → bug → repair → evidence. */
   traceability?: TraceRow[];
+  /** First-class, hashed evidence artifacts collected this run (§15/§16). */
+  evidence?: EvidenceItem[];
 }
 
 // Poll a URL until it responds OK, so QA never gets an unready server (arch §23).
@@ -114,6 +119,8 @@ export class Orchestrator {
   private startedAt = 0;
   private criteria: AcceptanceCriterion[] = [];
   private resolvedBugs: ResolvedBug[] = [];
+  private lastUnitOutput = "";
+  private runId = "";
 
   constructor(opts: OrchestratorOptions) {
     const cfg = loadConfig();
@@ -147,6 +154,8 @@ export class Orchestrator {
     this.startedAt = Date.now();
     this.criteria = [];
     this.resolvedBugs = [];
+    this.lastUnitOutput = "";
+    this.runId = `run-${Date.now().toString(36)}`;
     const resolvedMode = resolveInfraMode(this.infraMode);
     const { provider } = createSolariProvider(this.infraMode);
 
@@ -193,6 +202,7 @@ export class Orchestrator {
         const res = await sandbox!.runShell(TEST_COMMAND, { cwd: this.workspace });
         const counts = parseTestOutput(res);
         unitTests = counts;
+        this.lastUnitOutput = `${res.stdout}\n${res.stderr}`.trim();
         const passed = res.exitCode === 0 && counts.failed === 0;
         this.bus.emit(passed ? "test.passed" : "test.failed", `Unit tests: ${counts.passed} passed, ${counts.failed} failed`, { passed: counts.passed, failed: counts.failed });
         return { passed, res, counts };
@@ -395,6 +405,39 @@ export class Orchestrator {
 
     const durationMs = Date.now() - this.startedAt;
 
+    // Collect the run's evidence as first-class, hashed, immutable artifacts.
+    const evidenceLog = new EvidenceLog(this.runId);
+    if (this.lastUnitOutput) {
+      evidenceLog.add({
+        type: "TEST_OUTPUT",
+        title: `Unit tests: ${data.unitTests.passed} passed, ${data.unitTests.failed} failed`,
+        source: "developer",
+        content: this.lastUnitOutput,
+      });
+    }
+    if (data.qa) {
+      for (const ev of collectQAEvidence(data.qa, this.runId)) {
+        evidenceLog.add({
+          type: ev.type,
+          title: ev.title,
+          description: ev.description,
+          source: ev.source,
+          content: ev.content,
+          path: ev.path,
+          relatedCheckId: ev.relatedCheckId,
+          relatedCriteriaId: ev.relatedCriteriaId,
+          metadata: ev.metadata,
+        });
+      }
+    }
+    const evidence = evidenceLog.all();
+    if (evidence.length) {
+      this.bus.emit("log", `Evidence collected: ${evidence.length} artifacts`, {
+        count: evidence.length,
+        byType: evidenceLog.countByType(),
+      });
+    }
+
     // Requirement traceability, built deterministically from the QA evidence.
     const traceability = this.criteria.length
       ? buildTraceability({
@@ -421,6 +464,7 @@ export class Orchestrator {
           bugsDiscovered: data.qa?.bugs.length,
           previewUrl: data.previewUrl,
           durationMs,
+          evidenceCount: evidence.length,
         })
       : `Build ${finalState} before a review could be produced.`;
     if (traceability) {
@@ -441,6 +485,7 @@ export class Orchestrator {
       durationMs,
       criteria: this.criteria.length ? this.criteria : undefined,
       traceability,
+      evidence: evidence.length ? evidence : undefined,
     };
   }
 }

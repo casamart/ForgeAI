@@ -47,7 +47,7 @@ export const REVIEW_ASSESSMENT_HINT =
   '{"criteria":[{"criterion","met":bool,"justification"}],' +
   '"knownIssues":[..],"summary"}';
 
-export type ReviewStatus = "passed" | "partial" | "failed";
+export type ReviewStatus = "passed" | "partial" | "failed" | "blocked";
 
 // The Reviewer's full result: AI assessment + our derived verdict + the numbers.
 export interface ReviewResult {

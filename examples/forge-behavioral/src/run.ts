@@ -54,6 +54,7 @@ async function main(): Promise<number> {
     { name: "workflow COMPLETED with review PASS", passed: result.state === "COMPLETED" && result.review?.status === "passed", evidence: `state=${result.state}, verdict=${result.review?.status}` },
     { name: "preview URL produced", passed: !!result.previewUrl, evidence: `${result.previewUrl}` },
     { name: "traceability: all 3 criteria verified", passed: trace.length === 3 && trace.every((r) => r.status === "passed"), evidence: `${trace.map((r) => `${r.criterion.id}=${r.status}`).join(" ")}` },
+    { name: "evidence collected (hashed + immutable)", passed: (result.evidence?.length ?? 0) >= 2 && (result.evidence ?? []).every((e) => !!e.hash && Object.isFrozen(e)) && (result.evidence ?? []).some((e) => e.type === "HTTP_RESPONSE"), evidence: `${result.evidence?.length ?? 0} artifacts, types=[${[...new Set((result.evidence ?? []).map((e) => e.type))].join(",")}]` },
     { name: "AC-003 traced: bug → repair → pass", passed: !!ac3 && ac3.status === "passed" && ac3.repaired && ac3.resolvedBugIds.length >= 1 && ac3.checkIds.includes("TC-PROFILE"), evidence: `AC-003 checks=[${ac3?.checkIds.join(",")}] resolved=[${ac3?.resolvedBugIds.join(",")}] repaired=${ac3?.repaired}` },
   ];
   const passed = checks.filter((c) => c.passed).length;

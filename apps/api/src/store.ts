@@ -159,6 +159,7 @@ export function toDetail(r: ProjectRecord) {
     plan: r.result?.plan,
     criteria: r.result?.criteria,
     traceability: r.result?.traceability,
+    evidence: r.result?.evidence,
     eventCount: r.bus.history().length,
   };
 }

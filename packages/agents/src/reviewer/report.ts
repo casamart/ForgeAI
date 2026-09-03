@@ -15,11 +15,14 @@ export interface ReportMeta {
   previewUrl?: string;
   durationMs?: number;
   infraMode?: "solari" | "local";
+  /** Number of evidence artifacts collected this run (§42). */
+  evidenceCount?: number;
 }
 
 function verdictBadge(status: ReviewResult["status"]): string {
   if (status === "passed") return "✅ PASS";
   if (status === "partial") return "⚠️  PARTIAL";
+  if (status === "blocked") return "⛔ BLOCKED";
   return "❌ FAIL";
 }
 
@@ -44,6 +47,7 @@ export function renderFinalReport(
     meta.bugsDiscovered !== undefined ? `  Bugs discovered    : ${meta.bugsDiscovered}` : "",
     meta.bugsFixed !== undefined ? `  Bugs fixed         : ${meta.bugsFixed}` : "",
     `  Open bugs          : ${review.openBugs.length}`,
+    meta.evidenceCount !== undefined ? `  Evidence           : ${meta.evidenceCount} artifacts` : "",
     meta.previewUrl ? `  Preview            : ${meta.previewUrl}` : "",
     meta.durationMs !== undefined ? `  Duration           : ${(meta.durationMs / 1000).toFixed(1)}s` : "",
     line,

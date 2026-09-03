@@ -38,6 +38,16 @@ export {
   type RunJourneyOptions,
 } from "./browser/journey-runner.js";
 
+// --- Evidence model (§15/§16): first-class, hashed, immutable artifacts ---
+export {
+  createEvidence,
+  EvidenceLog,
+  collectQAEvidence,
+  type EvidenceType,
+  type EvidenceItem,
+  type EvidenceInput,
+} from "./evidence.js";
+
 // --- Requirement traceability (AC → test → bug → repair → evidence) ---
 export {
   assignCriteriaIds,

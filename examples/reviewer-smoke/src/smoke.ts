@@ -45,8 +45,8 @@ async function main(): Promise<number> {
   const bus = new EventBus();
   const logger = new Logger({ scope: "rev-smoke", bus });
 
-  // The mock returns the same "all met" assessment for both review() calls.
-  const ai = MockProvider.fromReplies([ASSESSMENT_ALL_MET, ASSESSMENT_ALL_MET]);
+  // The mock returns the same "all met" assessment for all review() calls.
+  const ai = MockProvider.fromReplies([ASSESSMENT_ALL_MET, ASSESSMENT_ALL_MET, ASSESSMENT_ALL_MET]);
   const reviewer = new ReviewerAgent({ ai, bus, logger });
 
   // Scenario 1: clean evidence -> should PASS.
@@ -67,6 +67,15 @@ async function main(): Promise<number> {
   };
   const failing = await reviewer.review(failingInput);
 
+  // Scenario 3: the app couldn't be exercised at all → BLOCKED (§13), even
+  // though the AI marks the criteria met.
+  const blockedInput: ReviewInput = {
+    ...cleanInput,
+    unitTests: { passed: 0, failed: 0 },
+    browserTests: { passed: 0, failed: 0, blocked: 2, inconclusive: 0 },
+  };
+  const blocked = await reviewer.review(blockedInput);
+
   // Show the rendered report for the clean run.
   console.log("\n" + renderFinalReport(clean, {
     projectName: "Worker Marketplace API",
@@ -82,6 +91,7 @@ async function main(): Promise<number> {
     { name: "clean evidence -> PASS", passed: clean.status === "passed", evidence: `status=${clean.status}` },
     { name: "clean requirements 100%", passed: clean.requirementsSatisfied === 1, evidence: `${Math.round(clean.requirementsSatisfied * 100)}%` },
     { name: "failing test -> FAIL (gate overrides AI)", passed: failing.status === "failed", evidence: `status=${failing.status} (AI marked all met)` },
+    { name: "unreachable app -> BLOCKED (not pass/fail)", passed: blocked.status === "blocked", evidence: `status=${blocked.status} (QA all-blocked)` },
   ];
   const passed = checks.filter((c) => c.passed).length;
   const allPass = passed === checks.length;
